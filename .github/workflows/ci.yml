@@ -55,6 +55,8 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-composer-
 
+      -name: Update composer
+      run: composer update
       - name: Install Composer dependencies
         run: composer install --no-interaction --no-progress --prefer-dist
 
