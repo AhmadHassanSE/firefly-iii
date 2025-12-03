@@ -54,7 +54,7 @@ jobs:
         with:
           php-version: ${{ matrix.php }}
           extensions: mbstring, intl, xml, zip, bcmath, gd, pdo_mysql
-          coverage: none
+          coverage: xdebug
 
       - name: Cache Composer
         uses: actions/cache@v4
