@@ -1,0 +1,113 @@
+name: Backend Tests
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  backend-tests:
+    name: Backend tests (PHP ${{ matrix.php }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        php: [ '8.4', '8.5' ]
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: firefly_test
+          MYSQL_USER: firefly
+          MYSQL_PASSWORD: secret
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h localhost -uroot -proot"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=10
+      redis:
+        image: redis:7
+        ports:
+          - 6379:6379
+
+    env:
+      APP_ENV: testing
+      DB_CONNECTION: mysql
+      DB_HOST: 127.0.0.1
+      DB_PORT: 3306
+      DB_DATABASE: firefly_test
+      DB_USERNAME: firefly
+      DB_PASSWORD: secret
+      CACHE_DRIVER: redis
+      REDIS_HOST: 127.0.0.1
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          extensions: mbstring, intl, xml, zip, bcmath, gd, pdo_mysql
+          coverage: none
+
+      - name: Cache Composer
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.composer/cache
+            vendor
+          key: ${{ runner.os }}-composer-${{ hashFiles('**/composer.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-composer-
+
+      - name: Install Composer dependencies (no scripts)
+        run: composer install --no-interaction --no-progress --prefer-dist --no-scripts
+
+      - name: Install MySQL client
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y default-mysql-client
+
+      - name: Copy CI env
+        run: |
+          if [ -f .ci/.env.ci ]; then cp .ci/.env.ci .env; fi
+
+      - name: Wait for MySQL to be ready
+        run: |
+          for i in {1..30}; do
+            mysqladmin ping -h127.0.0.1 -uroot -proot && break || sleep 2
+          done
+
+      - name: Prepare application (migrations)
+        run: |
+          php artisan key:generate
+          php artisan migrate --force || true
+
+      - name: Run composer post-install scripts
+        run: composer run-script post-install-cmd --no-interaction
+
+      - name: Run application post-install instruction
+        run: php artisan firefly-iii:instructions install
+
+      - name: Run unit tests
+        run: |
+          vendor/bin/phpunit --colors=always tests/unit || exit $?
+
+      - name: Run integration tests
+        run: |
+          vendor/bin/phpunit --colors=always tests/integration || exit $?
+
+      - name: Upload test logs (if any)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phpunit-logs-${{ matrix.php }}
+          path: |
+            storage/logs
+            junit.xml
