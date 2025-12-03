@@ -19,14 +19,6 @@ jobs:
           extensions: mbstring, xml, ctype, iconv, intl, pdo_sqlite
           coverage: xdebug
 
-      - name: Install Composer dependencies
-        run: composer install --prefer-dist --no-progress --no-suggest
-
-      - name: Build Docker image (optional)
-        if: success()
-        run: |
-          docker build -t firefly-iii:test .
-
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
         with:
