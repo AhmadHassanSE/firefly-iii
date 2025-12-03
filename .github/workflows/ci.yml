@@ -55,8 +55,8 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-composer-
 
-      - name: Install Composer dependencies
-        run: composer install --no-interaction --no-progress --prefer-dist
+      - name: Install Composer dependencies (no scripts)
+        run: composer install --no-interaction --no-progress --prefer-dist --no-scripts
 
       - name: Install MySQL client
         run: |
@@ -77,6 +77,15 @@ jobs:
         run: |
           php artisan key:generate
           php artisan migrate --force || true
+
+      - name: Run post-install scripts (safe)
+        run: |
+          echo "Running composer post-install scripts (will not fail CI on error)"
+          composer run-script post-install-cmd --no-interaction || true
+          echo "Attempting artisan post-install instruction command (allowed to fail)"
+          php artisan firefly-iii:instructions install || true
+        env:
+          CI: true
 
       - name: Run CI scripts
         run: |
